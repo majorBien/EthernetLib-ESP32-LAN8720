@@ -25,6 +25,6 @@ void app_main(void)
 	ESP_ERROR_CHECK(ret);
 
 	// Start Wifi
-	ethAppStart();
+	eth_app_task();
 }
 

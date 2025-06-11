@@ -17,7 +17,6 @@
 #include "esp_log.h"
 #include "tasks_common.h"
 #include "driver/gpio.h"
-#include "http_server.h"
 
 #define PIN_PHY_CLK_EN 2
 
@@ -41,15 +40,9 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t ev
             break;
         case ETHERNET_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "Ethernet Link Down");
-            http_server_stop();
             break;
         case ETHERNET_EVENT_START:
             ESP_LOGI(TAG, "Ethernet Started");
-            
-			http_server_start();
-			web_socket_task_start();
-		
-
             break;
         case ETHERNET_EVENT_STOP:
             ESP_LOGI(TAG, "Ethernet Stopped");
