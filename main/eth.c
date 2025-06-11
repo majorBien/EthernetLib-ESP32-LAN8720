@@ -1,16 +1,25 @@
 /*
  * eth.c
  *
- *  Created on: 27 sie 2024
+ *  Created on: 24 lut 2025
  *      Author: majorBien
  */
 
 
 
 #include "eth.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_event.h"
+#include "esp_netif.h"
+#include "esp_eth.h"
+#include "lwip/dns.h"
+#include "esp_log.h"
+#include "tasks_common.h"
+#include "driver/gpio.h"
+#include "http_server.h"
 
 #define PIN_PHY_CLK_EN 2
-
 
 
 
@@ -18,6 +27,7 @@ static const char *TAG = "eth";
 
 static esp_netif_t *eth_netif = NULL;
 static esp_eth_handle_t eth_handle = NULL;
+
 static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     uint8_t mac_addr[6] = {0};
     esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
@@ -28,15 +38,18 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t ev
             ESP_LOGI(TAG, "Ethernet Link Up");
             ESP_LOGI(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
                      mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-
-
-
             break;
         case ETHERNET_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "Ethernet Link Down");
+            http_server_stop();
             break;
         case ETHERNET_EVENT_START:
             ESP_LOGI(TAG, "Ethernet Started");
+            
+			http_server_start();
+			web_socket_task_start();
+		
+
             break;
         case ETHERNET_EVENT_STOP:
             ESP_LOGI(TAG, "Ethernet Stopped");
@@ -59,27 +72,6 @@ static void got_ip_event_handler(void *arg, esp_event_base_t event_base, int32_t
     ESP_LOGI(TAG, "~~~~~~~~~~~");
 }
 
-
-void get_eth_mac(uint8_t *mac_addr) {
-
-    const char *mac_str = ETH_AP_MAC_ADDRESS;
-    
- 
-    char *token;
-    char *mac_copy = strdup(mac_str); 
-    
-
-    token = strtok(mac_copy, ":");
-    int index = 0;
-
-    while (token != NULL && index < 6) {
-      
-        mac_addr[index++] = (uint8_t) strtol(token, NULL, 16);
-        token = strtok(NULL, ":");
-    }
-
-    free(mac_copy); 
-}
 
 void ethernet_init(void) {
 
@@ -110,9 +102,6 @@ void ethernet_init(void) {
     
     ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
 
-    uint8_t base_mac[6];
-    get_eth_mac(base_mac);
-    mac->set_addr(mac, base_mac);
 
     ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
     ESP_ERROR_CHECK(esp_eth_start(eth_handle));
@@ -154,7 +143,7 @@ void setStaticIP(CFG * config)
 
 }
 
-static void eth_app_task(void *pvParameters)
+void eth_app_task(void)
 {
 	ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -162,17 +151,6 @@ static void eth_app_task(void *pvParameters)
     ethernet_init();
 	setStaticIP(&AppConfig);
 
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(1000)); 
-    }
 }
-
-void ethAppStart(void)
-{
-	
-	xTaskCreatePinnedToCore(&eth_app_task, "eth_app_task", ETH_APP_TASK_STACK_SIZE, NULL, ETH_APP_TASK_PRIORITY, NULL, ETH_APP_TASK_CORE_ID);
-}
-
-
 
 
